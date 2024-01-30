@@ -15,7 +15,6 @@ from ufl import ( FacetNormal , Identity , Measure , TestFunctions, TrialFunctio
 
 import glob
 import os
-
 def delete_files_by_extension(extension):
     files_to_delete = glob.glob(f"*.{extension}")
     for file_path in files_to_delete:
@@ -28,6 +27,12 @@ extension_to_delete = "xdmf"  # Change this to the extension you want to delete
 delete_files_by_extension(extension_to_delete)
 extension_to_delete = "h5"  # Change this to the extension you want to delete
 delete_files_by_extension(extension_to_delete)
+
+import time 
+start_time = time.time()
+print('start_time = ',str(start_time))
+
+debugging = False
 
 #
 def epsilon(u ):
@@ -91,10 +96,12 @@ facet_tag = meshtags ( mesh , fdim , facet_indices [ sorted_facets ], facet_mark
 t = 0 # Start time
 Tf = 6 # End time
 num_steps = 1000 # Number of time steps
-factor = 5
+factor = 20
 Tf = Tf/factor
 num_steps = int(num_steps/factor)
 dt = (Tf -t )/ num_steps # Time step size
+print('running until total time = ',str(Tf))
+print('with ',str(num_steps),' total time steps of ',str(dt),' seconds each')
 
 #
 ## Material parameters
@@ -122,7 +129,7 @@ ds = Measure ("ds", domain = mesh , subdomain_data = facet_tag )
 normal = FacetNormal ( mesh )
 #
 # Define Mixed Space (R2 ,R) -> (u,p)
-displacement_element = VectorElement ("CG", mesh.ufl_cell() , 2) # I changed from 2 to 3
+displacement_element = VectorElement ("CG", mesh.ufl_cell() , 2) # minimum 2 is necessary
 pressure_element = FiniteElement ("CG", mesh.ufl_cell() , 1)
 
 MS = FunctionSpace ( mesh , MixedElement ([displacement_element , pressure_element ]) )
@@ -221,6 +228,8 @@ fspace_interp_u = FunctionSpace(mesh, VectorElement("CG", mesh.ufl_cell(), 1))
 fspace_interp_p = FunctionSpace(mesh, FiniteElement("CG", mesh.ufl_cell(), 1))
 __u_interpolated = Function(fspace_interp_u) 
 __p_interpolated = Function(fspace_interp_p) 
+__u_interpolated.name = "Displacement"
+__p_interpolated.name = "Pressure"
 
 #  Create an output xdmf file to store the values --------------- from clips 
 # xdmf = XDMFFile( mesh.comm , "./terzaghi.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.ASCII)
@@ -228,6 +237,8 @@ xdmf_pressure = XDMFFile( mesh.comm , "./pressure.xdmf", "w", encoding = dolfinx
 xdmf_displacement = XDMFFile( mesh.comm , "./displacement.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
 xdmf_pressure.write_mesh( mesh )
 xdmf_displacement.write_mesh( mesh )
+# xdmf_displacement.write_function( __u_interpolated ,t) # nothing to plot yet 
+# xdmf_pressure.write_function( __p_interpolated ,t)
 
 #
 # Solve the problem and evaluate values of interest
@@ -249,45 +260,48 @@ for n in range ( num_steps ):
     Xn.x.array[:] = X0.x.array
     Xn.x.scatter_forward ()
     __u , __p = X0.split ()
-    __u_interpolated.interpolate(__u)
-    __p_interpolated.interpolate(__p)
-    __u_interpolated.name = "Displacement"
-    __p_interpolated.name = "Pressure"
+    # __u_interpolated.interpolate(__u)
+    # __p_interpolated.interpolate(__p)
+    # __u_interpolated.name = "Displacement"
+    # __p_interpolated.name = "Pressure"
     
-    if(t<(2*dt)):   
-        # ADD MORE WIRITNG TO THE XDMF FILES HERE 
-        print('__u:')
-        print(str(type(__u)))
-        print(str(np.size(__u)))
-        
-        print('__u_interpolated:')
-        print(str(type(__u_interpolated)))
-        print(str(np.size(__u_interpolated)))
-        
-        print('__p:')
-        print(str(type(__p)))
-        print(str(np.size(__p)))
-        
-        print('__p_interpolated:')
-        print(str(type(__p_interpolated)))
-        print(str(np.size(__p_interpolated))) 
+    if((t<(2*dt)) or (n==int(num_steps/2)) or (t>(Tf-dt/2)) ):   
+        __u_interpolated.interpolate(__u)
+        __p_interpolated.interpolate(__p)
+
+        # if(debugging): 
+        #     print('__u:')
+        #     print(str(type(__u)))
+        #     print(str(np.size(__u)))
+            
+        #     print('__u_interpolated:')
+        #     print(str(type(__u_interpolated)))
+        #     print(str(np.size(__u_interpolated)))
+            
+        #     print('__p:')
+        #     print(str(type(__p)))
+        #     print(str(np.size(__p)))
+            
+        #     print('__p_interpolated:')
+        #     print(str(type(__p_interpolated)))
+        #     print(str(np.size(__p_interpolated))) 
 
         xdmf_displacement.write_function( __u_interpolated ,t)
         xdmf_pressure.write_function( __p_interpolated ,t)
     
-    if(n==int(num_steps/2)): 
-        print('writing xdmf')
-        # print('time = ',str(t))
-        xdmf_displacement.write_function( __u_interpolated ,t)
-        xdmf_pressure.write_function( __p_interpolated ,t)
-        # ------------------------------ end from clips   
-    if(t>(Tf-dt/2)): 
+    # # # if(n==int(num_steps/2)): 
+    # #     # print('writing xdmf')
+    # #     # # print('time = ',str(t))
+    # #     # xdmf_displacement.write_function( __u_interpolated ,t)
+    # #     # xdmf_pressure.write_function( __p_interpolated ,t)
+    # #     # # ------------------------------ end from clips   
+    # # # if(t>(Tf-dt/2)): 
 
-        print('writing xdmf')
-        # print('time = ',str(t))
-        xdmf_displacement.write_function( __u_interpolated ,t)
-        xdmf_pressure.write_function( __p_interpolated ,t)
-        # ------------------------------ end from clips     
+    # #     # print('writing xdmf')
+    # #     # # print('time = ',str(t))
+    # #     # xdmf_displacement.write_function( __u_interpolated ,t)
+    # #     # xdmf_pressure.write_function( __p_interpolated ,t)
+    # #     # ------------------------------ end from clips     
     
     # Compute L2 norm for pressure
     error_L2p = L2_error_p ( mesh , pressure_element , __p )
@@ -302,3 +316,7 @@ if mesh.comm.rank == 0:
 # xdmf.close() # --------------- from clips 
 xdmf_displacement.close() 
 xdmf_pressure.close() 
+end_time = time.time()
+print('end_time = ',str(end_time))
+total_time = start_time - end_time
+print('total time: ',str(total_time))
