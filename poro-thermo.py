@@ -122,10 +122,7 @@ S = ( porosity / Kf ) +(1 - porosity ) / Ks
 #
 ## Mechanical loading
 pinit = 100 #[Pa]
-T = Constant ( mesh , ScalarType ( -pinit )) #(- pinit ))
-print('pinit = ',str(pinit),' = the initial pressure of fluid in the porous medium')
-print('T =     ',str(pinit),' = the stress applied to the top of the porous medium')
-
+T = Constant ( mesh , ScalarType (- pinit/2 )) #(- pinit ))
 #
 # Create the surfacic element
 ds = Measure ("ds", domain = mesh , subdomain_data = facet_tag )
