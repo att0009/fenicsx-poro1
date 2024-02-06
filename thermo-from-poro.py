@@ -307,10 +307,6 @@ counter = 0
 myprint = int(num_steps / 10)
 
 for n in range ( num_steps ):
-    # counter = counter + 1
-    # if(counter>myprint): 
-    #     print('t = ',str(t))
-    #     counter = 0
     t += dt
     print('t = ',str(t))
     num_its , converged = solver.solve( X0 )
@@ -319,50 +315,15 @@ for n in range ( num_steps ):
     Xn.x.array[:] = X0.x.array
     Xn.x.scatter_forward ()
     __u , __p, __t = X0.split ()
-    # __u_interpolated.interpolate(__u)
-    # __p_interpolated.interpolate(__p)
-    # __u_interpolated.name = "Displacement"
-    # __p_interpolated.name = "Pressure"
     
     if((t<(2*dt)) or (n==int(num_steps/2)) or (t>(Tf-dt/2)) ):   
         __u_interpolated.interpolate(__u)
         __p_interpolated.interpolate(__p)
         __t_interpolated.interpolate(__t)
 
-        # if(debugging): 
-        #     print('__u:')
-        #     print(str(type(__u)))
-        #     print(str(np.size(__u)))
-            
-        #     print('__u_interpolated:')
-        #     print(str(type(__u_interpolated)))
-        #     print(str(np.size(__u_interpolated)))
-            
-        #     print('__p:')
-        #     print(str(type(__p)))
-        #     print(str(np.size(__p)))
-            
-        #     print('__p_interpolated:')
-        #     print(str(type(__p_interpolated)))
-        #     print(str(np.size(__p_interpolated))) 
-
         xdmf_displacement.write_function( __u_interpolated ,t)
         xdmf_pressure.write_function( __p_interpolated ,t)
         xdmf_temp.write_function( __t_interpolated ,t)
-    
-    # # # if(n==int(num_steps/2)): 
-    # #     # print('writing xdmf')
-    # #     # # print('time = ',str(t))
-    # #     # xdmf_displacement.write_function( __u_interpolated ,t)
-    # #     # xdmf_pressure.write_function( __p_interpolated ,t)
-    # #     # # ------------------------------ end from clips   
-    # # # if(t>(Tf-dt/2)): 
-
-    # #     # print('writing xdmf')
-    # #     # # print('time = ',str(t))
-    # #     # xdmf_displacement.write_function( __u_interpolated ,t)
-    # #     # xdmf_pressure.write_function( __p_interpolated ,t)
-    # #     # ------------------------------ end from clips     
     
     # Compute L2 norm for pressure
     error_L2p = L2_error_p ( mesh , pressure_element , __p )
