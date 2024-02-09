@@ -10,6 +10,9 @@ import numpy as np
 import numpy as np
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
+from dolfinx.fem.petsc import NonlinearProblem
+import dolfinx.nls.petsc
+
 
 from tucker_mods import *
 extension_to_delete = "png"  # Change this to the extension you want to delete
@@ -19,19 +22,7 @@ delete_files_by_extension(extension_to_delete)
 extension_to_delete = "h5"  # Change this to the extension you want to delete
 delete_files_by_extension(extension_to_delete)
 
-import time 
-start_time = time.time()
-
-## Time parametrization
-t = 0 # Start time
-Tf = 5 # End time
-num_steps = 1000 # Number of time steps
-factor = 100
-Tf = Tf/factor
-num_steps = int(num_steps/factor)
-dt = (Tf -t )/ num_steps # Time step size
-print('running until total time = ',str(Tf))
-print('with ',str(num_steps),' total time steps of ',str(dt),' seconds each')
+start_time = check_clock()
 
 L = 1.
 R = 0.1
@@ -40,12 +31,11 @@ N = 50  # mesh density
 # domain = mshr.Rectangle(dolfinx.mesh.Point(0., 0.), dolfinx.mesh.Point(L, L)) - mshr.Circle(dolfinx.mesh.Point(0., 0.), R, 100)
 # mesh = mshr.generate_mesh(domain, N)
 ## Create the domain / mesh
-# Height = 1e-4 #[m]
-# Width = 1e-5 #[m]
-# Length = 1e-5 #[m]
+# Length, Width, Height = 1e-5 , 1e-5 , 1e-4 #[m]
 # Ln, Wn, Hn = 8, 8, 20
 Length, Width, Height = 2, 2, 2
-Ln, Wn, Hn = 8, 8, 8
+# Ln, Wn, Hn = 8, 8, 8
+Ln, Wn, Hn = 10, 10, 10
 domain = dolfinx.mesh.create_box( MPI.COMM_WORLD , np.array ([[0.0 ,0.0 ,0.0] ,[ Length , Width , \
     Height ]]) , [Ln, Wn, Hn] , cell_type = dolfinx.mesh.CellType.tetrahedron )
 # domain = dolfinx.mesh.create_rectangle( MPI.COMM_WORLD , np.array ([[0.0 ,0.0 ] ,[ Length , Width , \
@@ -112,15 +102,26 @@ bc2 = dolfinx.fem.dirichletbc(ScalarType(10), dolfinx.fem.locate_dofs_topologica
 
 
 
-# we make the thermal problem first: 
+# we make the thermal problem first: ###########################################################################################
 temp_test = ufl.TestFunction(Vt_space)
-temp_trial = ufl.TrialFunction(Vt_space)
+# temp_trial = ufl.TrialFunction(Vt_space)
     # test + trial function, like Functions, are defined based on the FunctionSpace
-therm_form = (cV*(temp_trial-temp_old)/dt*temp_test + \
-              ufl.dot(k*ufl.grad(temp_trial), ufl.grad(temp_test)))*ufl.dx 
-            # + kappa*T0*ufl.tr(eps(u_trial-uold))/dt*temp_test # leave this out b/c it involves u_trial
+# therm_form = (cV*(temp_new-temp_old)/dt*temp_test + \
+#               ufl.dot(k*ufl.grad(temp_new), ufl.grad(temp_test)))*ufl.dx 
+#             # + kappa*T0*ufl.tr(eps(u_trial-uold))/dt*temp_test # leave this out b/c it involves u_trial
+therm_form = (ufl.dot(k*ufl.grad(temp_new), ufl.grad(temp_test)))*ufl.dx 
 
-# then we make the mechanical problem
+# temp_new already defined
+dt_new = ufl.TrialFunction(Vt_space)
+J = ufl.derivative(therm_form, temp_new, dt_new)
+problem_therm = NonlinearProblem(therm_form, temp_new, bcs = [bc2], J=J)
+solver_therm = dolfinx.nls.petsc.NewtonSolver( domain.comm , problem_therm )
+solver_therm.convergence_criterion = "incremental"
+num_its , converged = solver_therm.solve( temp_new )
+
+      
+
+# then we make the mechanical problem ###########################################################################################
 def eps(v):
     return ufl.sym(ufl.grad(v))
 
@@ -128,36 +129,26 @@ def sigma(v, Theta):
     return (lmbda*ufl.tr(eps(v)) - kappa*Theta)*ufl.Identity(3) + 2*mu*eps(v)
     # return (lmbda*ufl.tr(eps(v)) - kappa*Theta)*len(v) + 2*mu*eps(v)
 
-
 u_test = ufl.TestFunction(Vu_space) 
-u_trial = ufl.TrialFunction(Vu_space)
+# u_trial = ufl.TrialFunction(Vu_space)
 
 # adding a load: 
 T = dolfinx.fem.Constant(domain, dolfinx.default_scalar_type((0, 0, 1000)))
 ds = ufl.Measure("ds", domain=domain)
 # a = ufl.inner(sigma(u), epsilon(v)) * ufl.dx
 # L = ufl.dot(f, v) * ufl.dx + ufl.dot(T, v) * ds
-mech_form = ufl.inner(sigma(u_trial, temp_new), eps(u_test))*ufl.dx + ufl.dot(T, u_test) * ds
+mech_form = ufl.inner(sigma(u_new, temp_new), eps(u_test))*ufl.dx + ufl.dot(T, u_test) * ds
     # I replace temp_trial w/ temp_new... let's see if that changes anything 
+    
+# u_new already defined
+du_new = ufl.TrialFunction(Vu_space)
+J = ufl.derivative(mech_form, u_new, du_new)
+problem_mech = NonlinearProblem(mech_form, u_new, bcs = [bc1], J=J)
+solver_mech = dolfinx.nls.petsc.NewtonSolver( domain.comm , problem_mech )
+solver_mech.convergence_criterion = "incremental"
+num_its , converged = solver_mech.solve( u_new )
 
 
-# all the old stuff: 
-# U_ = ufl.TestFunction(V)
-# (u_test, temp_test) = ufl.split(U_)
-# dU = ufl.TrialFunction(V)
-# (u_trial, temp_trial) = ufl.split(dU)
-# T = dolfinx.fem.Constant(domain, dolfinx.default_scalar_type((0, 0, 1000)))
-# ds = ufl.Measure("ds", domain=domain)
-# mech_form = ufl.inner(sigma(u_trial, temp_trial), eps(u_test))*ufl.dx + ufl.dot(T, u_test) * ds
-# therm_form = (cV*(temp_trial-Thetaold)/dt*temp_test +
-#               kappa*T0*ufl.tr(eps(u_trial-uold))/dt*temp_test +
-#               ufl.dot(k*ufl.grad(temp_trial), ufl.grad(temp_test)))*ufl.dx
-# form = mech_form + therm_form
-
-
-# U = dolfinx.fem.Function(V)
-    # in "poro.py", X0 and Xn are created w/ "dolfinx.fem.function" (as opposed to ufl.function), 
-    # and they are what is solved for by the NewtonSolver
 
 #  Create an output xdmf file to store the values --------------- from clips 
 # xdmf = XDMFFile( mesh.comm , "./terzaghi.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.ASCII)
@@ -170,43 +161,13 @@ xdmf_temp.write_mesh( domain )
 # __u , __t = U.split()
 __u_interpolated.interpolate(u_new)
 __t_interpolated.interpolate(temp_new)
-xdmf_displacement.write_function( __u_interpolated ,t)
-xdmf_temp.write_function( __t_interpolated ,t)
+xdmf_displacement.write_function( __u_interpolated) # ,t) # steady-state
+xdmf_temp.write_function( __t_interpolated) # ,t)
 
-# problem = LinearProblem(a, L, [bc0, bc1]
-from dolfinx.fem.petsc import LinearProblem
-# problem = LinearProblem(dolfinx.fem.form(ufl.lhs(form)) , dolfinx.fem.form(ufl.rhs(form)), [bc1, bc2])
-# problem = LinearProblem((ufl.lhs(form)) , (ufl.rhs(form)), [bc1, bc2])
-
-problem_therm = LinearProblem((ufl.lhs(therm_form)) , (ufl.rhs(therm_form)), [bc2])
-problem_mech = LinearProblem((ufl.lhs(mech_form)) , (ufl.rhs(mech_form)), [bc1])
-
-i = 0
-for n in range ( num_steps ):
-    t += dt
-    i +=1
-    print("Increment " + str(i+1))
-    
-    # U = problem.solve()
-    # Uold.x.array[:] = U.x.array[:]
-    
-    temp_new = problem_therm.solve()
-    temp_old.x.array[:] = temp_new.x.array[:]
-    
-    u_new = problem_mech.solve()
-    u_old.x.array[:] = u_new.x.array[:]
-    
-    
-    if( (t<dt*1.5) or (t>(Tf-dt))):
-        print('splitting, interpolating, and writing u and t ')
-        __u_interpolated.interpolate(u_new)
-        __t_interpolated.interpolate(temp_new)
-        xdmf_displacement.write_function( __u_interpolated ,t)
-        xdmf_temp.write_function( __t_interpolated ,t)
 
 xdmf_displacement.close() 
 xdmf_temp.close()
-end_time = time.time()
+end_time = check_clock()
 # print('end_time = ',str(end_time))
 total_time = end_time - start_time
 print('total time: ',str(total_time))

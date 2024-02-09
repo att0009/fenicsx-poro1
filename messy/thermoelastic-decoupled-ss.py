@@ -2,7 +2,7 @@
 # coding: utf-8
 # https://comet-fenics.readthedocs.io/en/latest/demo/thermoelasticity/thermoelasticity_transient.html
 
-# # Thermo-elastic evolution problem (full coupling)
+# # Thermo-elastic steady-state decoupled
 import dolfinx
 import ufl
 import numpy as np
@@ -10,6 +10,8 @@ import numpy as np
 import numpy as np
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
+from dolfinx.fem.petsc import LinearProblem
+
 
 from tucker_mods import *
 extension_to_delete = "png"  # Change this to the extension you want to delete
@@ -19,19 +21,7 @@ delete_files_by_extension(extension_to_delete)
 extension_to_delete = "h5"  # Change this to the extension you want to delete
 delete_files_by_extension(extension_to_delete)
 
-import time 
-start_time = time.time()
-
-## Time parametrization
-t = 0 # Start time
-Tf = 5 # End time
-num_steps = 1000 # Number of time steps
-factor = 100
-Tf = Tf/factor
-num_steps = int(num_steps/factor)
-dt = (Tf -t )/ num_steps # Time step size
-print('running until total time = ',str(Tf))
-print('with ',str(num_steps),' total time steps of ',str(dt),' seconds each')
+start_time = check_clock()
 
 L = 1.
 R = 0.1
@@ -116,9 +106,18 @@ bc2 = dolfinx.fem.dirichletbc(ScalarType(10), dolfinx.fem.locate_dofs_topologica
 temp_test = ufl.TestFunction(Vt_space)
 temp_trial = ufl.TrialFunction(Vt_space)
     # test + trial function, like Functions, are defined based on the FunctionSpace
-therm_form = (cV*(temp_trial-temp_old)/dt*temp_test + \
-              ufl.dot(k*ufl.grad(temp_trial), ufl.grad(temp_test)))*ufl.dx 
-            # + kappa*T0*ufl.tr(eps(u_trial-uold))/dt*temp_test # leave this out b/c it involves u_trial
+# therm_form = (cV*(temp_trial-temp_old)/dt*temp_test + \
+#               ufl.dot(k*ufl.grad(temp_trial), ufl.grad(temp_test)))*ufl.dx 
+#             # + kappa*T0*ufl.tr(eps(u_trial-uold))/dt*temp_test # leave this out b/c it involves u_trial
+therm_form = (ufl.dot(k*ufl.grad(temp_trial), ufl.grad(temp_test)))*ufl.dx 
+
+from dolfinx.fem.petsc import LinearProblem
+problem_therm = LinearProblem((ufl.lhs(therm_form)) , (ufl.rhs(therm_form)), bcs=[bc2], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+temp_new = problem_therm.solve()
+temp_old.x.array[:] = temp_new.x.array[:]
+
+# problem = LinearProblem(a, L, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+# uh = problem.solve()
 
 # then we make the mechanical problem
 def eps(v):
@@ -139,6 +138,9 @@ ds = ufl.Measure("ds", domain=domain)
 # L = ufl.dot(f, v) * ufl.dx + ufl.dot(T, v) * ds
 mech_form = ufl.inner(sigma(u_trial, temp_new), eps(u_test))*ufl.dx + ufl.dot(T, u_test) * ds
     # I replace temp_trial w/ temp_new... let's see if that changes anything 
+problem_mech = LinearProblem((ufl.lhs(mech_form)) , (ufl.rhs(mech_form)), [bc1])
+u_new = problem_mech.solve()
+u_old.x.array[:] = u_new.x.array[:]
 
 
 # all the old stuff: 
@@ -170,43 +172,44 @@ xdmf_temp.write_mesh( domain )
 # __u , __t = U.split()
 __u_interpolated.interpolate(u_new)
 __t_interpolated.interpolate(temp_new)
-xdmf_displacement.write_function( __u_interpolated ,t)
-xdmf_temp.write_function( __t_interpolated ,t)
+xdmf_displacement.write_function( __u_interpolated) # ,t)
+xdmf_temp.write_function( __t_interpolated) # ,t)
 
-# problem = LinearProblem(a, L, [bc0, bc1]
-from dolfinx.fem.petsc import LinearProblem
-# problem = LinearProblem(dolfinx.fem.form(ufl.lhs(form)) , dolfinx.fem.form(ufl.rhs(form)), [bc1, bc2])
-# problem = LinearProblem((ufl.lhs(form)) , (ufl.rhs(form)), [bc1, bc2])
+# # # # problem = LinearProblem(a, L, [bc0, bc1]
+# # # # from dolfinx.fem.petsc import LinearProblem
+# # # # problem = LinearProblem(dolfinx.fem.form(ufl.lhs(form)) , dolfinx.fem.form(ufl.rhs(form)), [bc1, bc2])
+# # # # problem = LinearProblem((ufl.lhs(form)) , (ufl.rhs(form)), [bc1, bc2])
 
-problem_therm = LinearProblem((ufl.lhs(therm_form)) , (ufl.rhs(therm_form)), [bc2])
-problem_mech = LinearProblem((ufl.lhs(mech_form)) , (ufl.rhs(mech_form)), [bc1])
+# # # problem_therm = LinearProblem((ufl.lhs(therm_form)) , (ufl.rhs(therm_form)), [bc2])
+# # # problem_mech = LinearProblem((ufl.lhs(mech_form)) , (ufl.rhs(mech_form)), [bc1])
 
-i = 0
-for n in range ( num_steps ):
-    t += dt
-    i +=1
-    print("Increment " + str(i+1))
+# # # i = 0
+# # # for n in range ( num_steps ):
+# # #     t += dt
+# # #     i +=1
+# # #     print("Increment " + str(i+1))
     
-    # U = problem.solve()
-    # Uold.x.array[:] = U.x.array[:]
+# # #     # U = problem.solve()
+# # #     # Uold.x.array[:] = U.x.array[:]
     
-    temp_new = problem_therm.solve()
-    temp_old.x.array[:] = temp_new.x.array[:]
+# # #     temp_new = problem_therm.solve()
+# # #     temp_old.x.array[:] = temp_new.x.array[:]
     
-    u_new = problem_mech.solve()
-    u_old.x.array[:] = u_new.x.array[:]
+# # #     u_new = problem_mech.solve()
+# # #     u_old.x.array[:] = u_new.x.array[:]
     
     
-    if( (t<dt*1.5) or (t>(Tf-dt))):
-        print('splitting, interpolating, and writing u and t ')
-        __u_interpolated.interpolate(u_new)
-        __t_interpolated.interpolate(temp_new)
-        xdmf_displacement.write_function( __u_interpolated ,t)
-        xdmf_temp.write_function( __t_interpolated ,t)
+# # #     if( (t<dt*1.5) or (t>(Tf-dt))):
+# # #         print('splitting, interpolating, and writing u and t ')
+# # #         __u_interpolated.interpolate(u_new)
+# # #         __t_interpolated.interpolate(temp_new)
+# # #         xdmf_displacement.write_function( __u_interpolated ,t)
+# # #         xdmf_temp.write_function( __t_interpolated ,t)
 
 xdmf_displacement.close() 
 xdmf_temp.close()
-end_time = time.time()
+
+end_time = check_clock()
 # print('end_time = ',str(end_time))
 total_time = end_time - start_time
 print('total time: ',str(total_time))

@@ -23,3 +23,6 @@ def print_variable(variable):
     print('size: ',str(size(variable)))
     print('value = ',str(variable))
     
+def check_clock(): 
+    from time import time
+    return time()
