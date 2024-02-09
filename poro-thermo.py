@@ -14,27 +14,13 @@ from mpi4py import MPI
 import ufl
 from ufl import ( FacetNormal , Identity , Measure , TestFunctions, TrialFunction , VectorElement , FiniteElement , dot , dx , inner , grad , nabla_div , div , sym , MixedElement , derivative , split )
 
-import glob
-import os
-def delete_files_by_extension(extension):
-    files_to_delete = glob.glob(f"*.{extension}")
-    for file_path in files_to_delete:
-        os.remove(file_path)
-        print(f"File '{file_path}' deleted.")
-
+from tucker_mods import *
 extension_to_delete = "png"  # Change this to the extension you want to delete
 delete_files_by_extension(extension_to_delete)
 extension_to_delete = "xdmf"  # Change this to the extension you want to delete
 delete_files_by_extension(extension_to_delete)
 extension_to_delete = "h5"  # Change this to the extension you want to delete
 delete_files_by_extension(extension_to_delete)
-
-def print_variable(variable):
-    variable_name = [name for name, value in globals().items() if value is variable][0]
-    print(f"Variable name using globals(): {variable_name}")
-    print('type: ',str(type(variable)))
-    print('size: ',str(np.size(variable)))
-    print('value = ',str(variable))
 
 import time 
 start_time = time.time()
@@ -297,9 +283,9 @@ __t_interpolated.name = "Temperature"
 
 #  Create an output xdmf file to store the values --------------- from clips 
 # xdmf = XDMFFile( mesh.comm , "./terzaghi.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.ASCII)
-xdmf_pressure = XDMFFile( mesh.comm , "./pressure.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
-xdmf_displacement = XDMFFile( mesh.comm , "./displacement.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
-xdmf_temp = XDMFFile( mesh.comm , "./temperature.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
+xdmf_pressure = XDMFFile( mesh.comm , "./results/pressure.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
+xdmf_displacement = XDMFFile( mesh.comm , "./results/displacement.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
+xdmf_temp = XDMFFile( mesh.comm , "./results/temperature.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
 xdmf_pressure.write_mesh( mesh )
 xdmf_displacement.write_mesh( mesh )
 xdmf_temp.write_mesh( mesh )

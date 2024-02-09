@@ -13,14 +13,7 @@ from petsc4py.PETSc import ScalarType
 from mpi4py import MPI
 from ufl import ( FacetNormal , Identity , Measure , TestFunctions, TrialFunction , VectorElement , FiniteElement , dot , dx , inner , grad , nabla_div , div , sym , MixedElement , derivative , split )
 
-import glob
-import os
-def delete_files_by_extension(extension):
-    files_to_delete = glob.glob(f"*.{extension}")
-    for file_path in files_to_delete:
-        os.remove(file_path)
-        print(f"File '{file_path}' deleted.")
-
+from tucker_mods import *
 extension_to_delete = "png"  # Change this to the extension you want to delete
 delete_files_by_extension(extension_to_delete)
 extension_to_delete = "xdmf"  # Change this to the extension you want to delete
@@ -223,7 +216,6 @@ solver.convergence_criterion = "incremental"
 print('mesh: ')
 print(str(type(mesh)))
 print(str(np.size(mesh)))
-# ------------------------------------------------------------ end from clips 
 
 # __u_interpolated = Function(FunctionSpace(mesh, VectorElement("CG", mesh.ufl_cell(), 1)))
 # __p_interpolated = Function(FunctionSpace(mesh, FiniteElement("CG", mesh.ufl_cell(), 1)))
@@ -236,8 +228,8 @@ __p_interpolated.name = "Pressure"
 
 #  Create an output xdmf file to store the values --------------- from clips 
 # xdmf = XDMFFile( mesh.comm , "./terzaghi.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.ASCII)
-xdmf_pressure = XDMFFile( mesh.comm , "./pressure.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
-xdmf_displacement = XDMFFile( mesh.comm , "./displacement.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
+xdmf_pressure = XDMFFile( mesh.comm , "./results/pressure.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
+xdmf_displacement = XDMFFile( mesh.comm , "./results/displacement.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
 xdmf_pressure.write_mesh( mesh )
 xdmf_displacement.write_mesh( mesh )
 # xdmf_displacement.write_function( __u_interpolated ,t) # nothing to plot yet 
@@ -263,10 +255,6 @@ for n in range ( num_steps ):
     Xn.x.array[:] = X0.x.array
     Xn.x.scatter_forward ()
     __u , __p = X0.split ()
-    # __u_interpolated.interpolate(__u)
-    # __p_interpolated.interpolate(__p)
-    # __u_interpolated.name = "Displacement"
-    # __p_interpolated.name = "Pressure"
     
     if((t<(2*dt)) or (n==int(num_steps/2)) or (t>(Tf-dt/2)) ):   
         __u_interpolated.interpolate(__u)
@@ -290,21 +278,7 @@ for n in range ( num_steps ):
         #     print(str(np.size(__p_interpolated))) 
 
         xdmf_displacement.write_function( __u_interpolated ,t)
-        xdmf_pressure.write_function( __p_interpolated ,t)
-    
-    # # # if(n==int(num_steps/2)): 
-    # #     # print('writing xdmf')
-    # #     # # print('time = ',str(t))
-    # #     # xdmf_displacement.write_function( __u_interpolated ,t)
-    # #     # xdmf_pressure.write_function( __p_interpolated ,t)
-    # #     # # ------------------------------ end from clips   
-    # # # if(t>(Tf-dt/2)): 
-
-    # #     # print('writing xdmf')
-    # #     # # print('time = ',str(t))
-    # #     # xdmf_displacement.write_function( __u_interpolated ,t)
-    # #     # xdmf_pressure.write_function( __p_interpolated ,t)
-    # #     # ------------------------------ end from clips     
+        xdmf_pressure.write_function( __p_interpolated ,t)  
     
     # Compute L2 norm for pressure
     error_L2p = L2_error_p ( mesh , pressure_element , __p )
@@ -316,7 +290,6 @@ for n in range ( num_steps ):
 if mesh.comm.rank == 0:
     print(f"L2 error p, min {np.min( L2_p ):.2e}, mean {np.mean ( L2_p ):.2e}, max{np.max( L2_p ):.2e}, std {np.std ( L2_p ) :.2e}")
 
-# xdmf.close() # --------------- from clips 
 xdmf_displacement.close() 
 xdmf_pressure.close() 
 end_time = time.time()

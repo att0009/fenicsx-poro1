@@ -45,43 +45,20 @@ debugging = False
 def epsilon(u ):
     return sym ( grad (u))
 #
-def teff(u, Theta):
-    # return lambda_m * nabla_div(u) * Identity( u.geometric_dimension() ) + 2*mu * epsilon( u)
-    # return lambda_m * nabla_div(u) * Identity( len(u) ) + 2 * mu * epsilon( u)
-    return (lambda_m * nabla_div(u) - kappa*Theta) * Identity( len(u) ) + 2 * mu * epsilon( u)
-# def sigma(v, Theta):
-#     return (lmbda*ufl.tr(eps(v)) - kappa*Theta)*ufl.Identity(2) + 2*mu*eps(v)
+def sigma(v, Theta):
+    return (lambda_m*ufl.tr(epsilon(v)) - kappa*Theta)*ufl.Identity(len(v)) + 2*mu*epsilon(v)
+    # return (lambda_m*ufl.tr(epsilon(v)) - kappa*Theta)*ufl.Identity(2) + 2*mu*epsilon(v)
 #
-kmax =1e3
-def terzaghi_p (x):
-    p0 , L= pinit , Height
-    cv = permeability.value / viscosity.value *( lambda_m.value +2* mu.value )
-    pression =0
-    for k in range (1 , int ( kmax )):
-        pression += p0 *4/ np.pi *( -1) **( k -1) /(2* k -1) * np.cos((2* k -1) *0.5* np.pi *( x[1]/L)) *  \
-            np.exp( -(2* k -1)**2 * 0.25* np.pi**2 * cv * t/L **2)
-        pl = pression
-    return pl
-#
-def L2_error_p ( mesh , pressure_element , __p ) :
-    V2 = FunctionSpace ( mesh , pressure_element )
-    pex = Function( V2 )
-    pex.interpolate( terzaghi_p )
-    L2_errorp , L2_normp = form ( inner ( __p - pex , __p - pex ) * dx ) , form ( inner (
-    pex , pex ) * dx )
-    error_localp = assemble_scalar ( L2_errorp )/ assemble_scalar ( L2_normp )
-    error_L2p = np.sqrt( mesh.comm.allreduce ( error_localp , op = MPI.SUM ))
-    return error_L2p
-#
+
 ## Create the domain / mesh
 Height = 1e-4 #[m]
-Width = Height / 2
-Length = Height / 2 
+Width = Height / 10
+Length = Height / 10
 # Width = 1e-5 #[m]
 # Length = 1e-5 #[m]
 
 mesh = create_box( MPI.COMM_WORLD , np.array ([[0.0 ,0.0 ,0.0] ,[ Length , Width , \
-    Height ]]) , [10 , 10, 20] , cell_type = CellType.tetrahedron )
+    Height ]]) , [8 , 8, 20] , cell_type = CellType.tetrahedron )
 domain = mesh 
 
 ## Define the boundaries :
@@ -126,8 +103,7 @@ print('with ',str(num_steps),' total time steps of ',str(dt),' seconds each')
 ## Material parameters
 E = Constant ( mesh , ScalarType (5000) )
 nu = Constant ( mesh , ScalarType (0.4) )
-lambda_m = Constant ( mesh , ScalarType ( E.value * nu.value /((1+ nu.value ) \
-    *(1 -2* nu.value ) )))
+lambda_m = Constant ( mesh , ScalarType ( E.value * nu.value /((1+ nu.value ) * (1 - 2 * nu.value ) )))
 mu = Constant ( mesh , ScalarType (E.value /(2*(1+ nu.value ))))
 rhos = Constant ( mesh , ScalarType (1) )
 permeability = Constant ( mesh , ScalarType (1.8e-15) )
@@ -167,9 +143,9 @@ normal = FacetNormal ( mesh )
 #
 # Define Mixed Space (R2 ,R) -> (u,p)
 displacement_element = VectorElement ("CG", mesh.ufl_cell() , 2) # minimum 2 is necessary
-pressure_element = FiniteElement ("CG", mesh.ufl_cell() , 1)
+# pressure_element = FiniteElement ("CG", mesh.ufl_cell() , 1)
 temp_element = FiniteElement ("CG", mesh.ufl_cell() , 1)
-MS = FunctionSpace ( mesh , MixedElement ([displacement_element , pressure_element, temp_element ]) )
+MS = FunctionSpace ( mesh , MixedElement ([displacement_element , temp_element ]) )
 #
 # THIS IS VERY DIFFERENT FROM THE OTHER ----------------*************************************
 # Define the Dirichlet condition
@@ -188,8 +164,8 @@ facets = facet_tag.find(4)
 dofs = locate_dofs_topological ( MS.sub(0).sub(0) , fdim , facets )
 bcs.append ( dirichletbc ( ScalarType (0) , dofs , MS.sub (0).sub (0) ))
 
-dofs = locate_dofs_topological ( MS.sub(2) , fdim , facets )
-bcs.append ( dirichletbc ( ScalarType (10) , dofs , MS.sub(2) ))
+# dofs = locate_dofs_topological ( MS.sub(2) , fdim , facets )
+# bcs.append ( dirichletbc ( ScalarType (10) , dofs , MS.sub(2) ))
 
 # uy =0
 facets = facet_tag.find (5)
@@ -199,10 +175,10 @@ bcs.append( dirichletbc ( ScalarType(0) , dofs , MS.sub(0).sub(1) ))
 facets = facet_tag.find(6)
 dofs = locate_dofs_topological ( MS.sub(0).sub(1) , fdim , facets )
 bcs.append ( dirichletbc ( ScalarType(0) , dofs , MS.sub(0).sub(1) ))
-# drainage p=0
+# drainage p=0 # TEMPERATURE = ZERO 
 facets = facet_tag . find (3)
 dofs = locate_dofs_topological ( MS.sub(1) , fdim , facets )
-bcs.append ( dirichletbc ( ScalarType(0) , dofs , MS.sub (1) ) )
+bcs.append ( dirichletbc ( ScalarType(10) , dofs , MS.sub (1) ) )
 #
 # Create the initial and solution spaces
 X0 = Function ( MS ) # dolfinx.fem.function - NOT ufl.function ()
@@ -218,17 +194,17 @@ with FUn_.vector.localForm () as initial_local :
 # Update Xn
 Xn.x.array [ Un_to_MS ] = FUn_.x.array
 Xn.x.scatter_forward ()
+# # # #
+# # # Pn_ , Pn_to_MS = MS.sub(1).collapse ()
+# # # FPn_ = Function ( Pn_ )
+# # # with FPn_.vector.localForm () as initial_local :
+# # #     initial_local.set( ScalarType ( pinit ))
+# # # #
+# # # # Update Xn
+# # # Xn.x.array [ Pn_to_MS ] = FPn_.x.array
+# # # Xn.x.scatter_forward ()
 #
-Pn_ , Pn_to_MS = MS.sub(1).collapse ()
-FPn_ = Function ( Pn_ )
-with FPn_.vector.localForm () as initial_local :
-    initial_local.set( ScalarType ( pinit ))
-#
-# Update Xn
-Xn.x.array [ Pn_to_MS ] = FPn_.x.array
-Xn.x.scatter_forward ()
-#
-Tn_ , Tn_to_MS = MS.sub(2).collapse () # I don't really understand this - hopefully I followed the pattern right 
+Tn_ , Tn_to_MS = MS.sub(1).collapse () # I don't really understand this - hopefully I followed the pattern right 
 FTn_ = Function ( Tn_ )
 with FUn_.vector.localForm () as initial_local :
     initial_local.set( ScalarType (0.0) )
@@ -240,24 +216,39 @@ Xn.x.scatter_forward ()
 # Variational form
 # Identify the unknowns from the function
 
-u_old , p_old, temp_old = ufl.split( X0 ) # old (initial) solution f's (?trial f's?)
-u_new , p_new, temp_new = ufl.split( Xn ) # current solution f's (?trial f's?)
+u_old , temp_old = ufl.split( X0 ) # old (initial) solution f's (?trial f's?)
+u_new , temp_new = ufl.split( Xn ) # current solution f's (?trial f's?)
 # Set up the test functions
-v , q , temp_test= ufl.TestFunctions( MS )
+# v , temp_test= ufl.TestFunctions( MS )
+u_test , temp_test= ufl.TestFunctions( MS )
     # v = displacement test function 
-    # q = pressure test function 
-# Equation 17 (equation 33)
-F = (1/ dt )* nabla_div (u_old - u_new )*q* dx + ( permeability / viscosity )* dot ( grad (p_old ) , \
-    grad (q) )* dx + ( S/ dt ) *(p_old - p_new )*q * dx
-# Equation 18 (equation 34)
-F += inner ( grad (v) , teff(u_old,temp_new))* dx - beta * p_old * nabla_div (v)* dx - T* inner (v , \
-    normal ) * ds (3)
-    # beta = biot coeff, p = density 
-    # T accounts for "mechanical load" (here, the pressure pinit)
+    # q = pressure test function (delted)
+# # # Equation 17 (equation 33)
+# # F = (1/ dt )* nabla_div (u_old - u_new )*q* dx + ( permeability / viscosity )* dot ( grad (p_old ) , \
+# #     grad (q) )* dx + ( S/ dt ) *(p_old - p_new )*q * dx
+# # # Equation 18 (equation 34)
+# # F += inner ( grad (v) , teff(u_old,temp_new))* dx - beta * p_old * nabla_div (v)* dx - T* inner (v , \
+# #     normal ) * ds (3)
+# #     # beta = biot coeff, p = density 
+# #     # T accounts for "mechanical load" (here, the pressure pinit)
+
+# mech form: 
+# mech_form = ufl.inner(sigma(du, dTheta), eps(u_))*ufl.dx
+# F = ufl.inner(sigma(du, dTheta), eps(u_))*ufl.dx
+F = ufl.inner(sigma(u_old, temp_old), epsilon(u_test))*ufl.dx # with solution functions 
+# F = ufl.inner(sigma(u_new, temp_new), epsilon(u_test))*ufl.dx # with solution functions 
+
+# # thermal form: therm_form
+# F += (cV*(temp_new-temp_old)/dt*temp_test + \
+#             ufl.dot(k*ufl.grad(temp_new), ufl.grad(temp_test)))*dx # \
+#             # + kappa*T0*ufl.tr(epsilon(u_new-u_old))/dt*temp_test
 # thermal form: therm_form
 F += (cV*(temp_new-temp_old)/dt*temp_test + \
-            ufl.dot(k*ufl.grad(temp_new), ufl.grad(temp_test)))*dx # \
+            ufl.dot(k*ufl.grad(temp_old), ufl.grad(temp_test)))*dx # \
             # + kappa*T0*ufl.tr(epsilon(u_new-u_old))/dt*temp_test
+
+# ??? should I try making F w/ trial functions? 
+
 # Non linear problem definition
 dX0 = TrialFunction ( MS )
 J = derivative (F , X0 , dX0 )
@@ -289,10 +280,10 @@ __t_interpolated.name = "Temperature"
 
 #  Create an output xdmf file to store the values --------------- from clips 
 # xdmf = XDMFFile( mesh.comm , "./terzaghi.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.ASCII)
-xdmf_pressure = XDMFFile( mesh.comm , "./pressure.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
+# xdmf_pressure = XDMFFile( mesh.comm , "./pressure.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
 xdmf_displacement = XDMFFile( mesh.comm , "./displacement.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
 xdmf_temp = XDMFFile( mesh.comm , "./temperature.xdmf", "w", encoding = dolfinx.io.XDMFFile.Encoding.HDF5)
-xdmf_pressure.write_mesh( mesh )
+# xdmf_pressure.write_mesh( mesh )
 xdmf_displacement.write_mesh( mesh )
 xdmf_temp.write_mesh( mesh )
 
@@ -314,21 +305,23 @@ for n in range ( num_steps ):
     # Update Value
     Xn.x.array[:] = X0.x.array
     Xn.x.scatter_forward ()
-    __u , __p, __t = X0.split ()
+    # __u , __p, __t = X0.split ()
+    __u , __t = X0.split ()
     
     if((t<(2*dt)) or (n==int(num_steps/2)) or (t>(Tf-dt/2)) ):   
         __u_interpolated.interpolate(__u)
-        __p_interpolated.interpolate(__p)
+        # __p_interpolated.interpolate(__p)
         __t_interpolated.interpolate(__t)
 
         xdmf_displacement.write_function( __u_interpolated ,t)
-        xdmf_pressure.write_function( __p_interpolated ,t)
+        # xdmf_pressure.write_function( __p_interpolated ,t)
         xdmf_temp.write_function( __t_interpolated ,t)
     
-    # Compute L2 norm for pressure
-    error_L2p = L2_error_p ( mesh , pressure_element , __p )
-    L2_p [n] = error_L2p
-    # Solve tracking
+    # # Compute L2 norm for pressure
+    # error_L2p = L2_error_p ( mesh , pressure_element , __p )
+    # L2_p [n] = error_L2p
+    error_L2p = 0
+    # # Solve tracking
     if mesh.comm.rank == 0:
         print(f" Time step {n}, Number of iterations { num_its }, Load {T. value },L2 - error p { error_L2p :.2e}")
 
@@ -337,7 +330,7 @@ if mesh.comm.rank == 0:
 
 # xdmf.close() # --------------- from clips 
 xdmf_displacement.close() 
-xdmf_pressure.close() 
+# xdmf_pressure.close() 
 xdmf_temp.close()
 end_time = time.time()
 print('end_time = ',str(end_time))
