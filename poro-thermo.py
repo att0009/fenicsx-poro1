@@ -75,13 +75,11 @@ def L2_error_p ( mesh , pressure_element , __p ) :
 #
 ## Create the domain / mesh
 Height = 1e-4 #[m]
-Width = Height / 2
-Length = Height / 2 
-# Width = 1e-5 #[m]
-# Length = 1e-5 #[m]
+Width = Height / 10
+Length = Height / 10
 
 mesh = create_box( MPI.COMM_WORLD , np.array ([[0.0 ,0.0 ,0.0] ,[ Length , Width , \
-    Height ]]) , [10 , 10, 20] , cell_type = CellType.tetrahedron )
+    Height ]]) , [8 , 8, 20] , cell_type = CellType.tetrahedron )
 domain = mesh 
 
 ## Define the boundaries :
@@ -250,14 +248,24 @@ v , q , temp_test= ufl.TestFunctions( MS )
 F = (1/ dt )* nabla_div (u_old - u_new )*q* dx + ( permeability / viscosity )* dot ( grad (p_old ) , \
     grad (q) )* dx + ( S/ dt ) *(p_old - p_new )*q * dx
 # Equation 18 (equation 34)
-F += inner ( grad (v) , teff(u_old,temp_new))* dx - beta * p_old * nabla_div (v)* dx - T* inner (v , \
+F += inner ( grad (v) , teff(u_old,temp_old))* dx - beta * p_old * nabla_div (v)* dx - T* inner (v , \
     normal ) * ds (3)
     # beta = biot coeff, p = density 
     # T accounts for "mechanical load" (here, the pressure pinit)
+
+# # alt 1: change u_old to u_new 
+# F += inner ( grad (v) , teff(u_new,temp_new))* dx - beta * p_old * nabla_div (v)* dx - T* inner (v , \
+#     normal ) * ds (3)
+# alt 1 change temp_new to temp_old : 
+# F += inner ( grad (v) , teff(u_old,temp_old))* dx - beta * p_old * nabla_div (v)* dx - T* inner (v , \
+#     normal ) * ds (3)
+
 # thermal form: therm_form
-F += (cV*(temp_new-temp_old)/dt*temp_test + \
-            ufl.dot(k*ufl.grad(temp_new), ufl.grad(temp_test)))*dx # \
-            # + kappa*T0*ufl.tr(epsilon(u_new-u_old))/dt*temp_test
+# F += (cV*(temp_new-temp_old)/dt*temp_test + ufl.dot(k*ufl.grad(temp_new), ufl.grad(temp_test)))*dx # + kappa*T0*ufl.tr(epsilon(u_new-u_old))/dt*temp_test
+# F += (cV*(temp_old-temp_new)/dt*temp_test + ufl.dot(k*ufl.grad(temp_new), ufl.grad(temp_test)))*dx # + kappa*T0*ufl.tr(epsilon(u_new-u_old))/dt*temp_test
+# F += (cV*(temp_new-temp_old)/dt*temp_test + ufl.dot(k*ufl.grad(temp_new), ufl.grad(temp_test)) + kappa*T0*ufl.tr(epsilon(u_new-u_old))/dt*temp_test )*ufl.dx
+# F += (cV*(temp_old-temp_new)/dt*temp_test + ufl.dot(k*ufl.grad(temp_new), ufl.grad(temp_test)) + kappa*T0*ufl.tr(epsilon(u_old-u_new))/dt*temp_test )*ufl.dx
+
 # Non linear problem definition
 dX0 = TrialFunction ( MS )
 J = derivative (F , X0 , dX0 )

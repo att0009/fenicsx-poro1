@@ -96,7 +96,7 @@ facet_tag = meshtags ( mesh , fdim , facet_indices [ sorted_facets ], facet_mark
 t = 0 # Start time
 Tf = 6 # End time
 num_steps = 1000 # Number of time steps
-factor = 20
+factor = 100
 Tf = Tf/factor
 num_steps = int(num_steps/factor)
 dt = (Tf -t )/ num_steps # Time step size
@@ -184,7 +184,7 @@ Xn.x.scatter_forward ()
 Pn_ , Pn_to_MS = MS . sub (1) . collapse ()
 FPn_ = Function ( Pn_ )
 with FPn_ . vector . localForm () as initial_local :
-    initial_local.set( ScalarType ( pinit ))
+    initial_local.set( ScalarType ( 0 ))#( pinit ))
 #
 # Update Xn
 Xn.x.array [ Pn_to_MS ] = FPn_ .x. array
