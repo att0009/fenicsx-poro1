@@ -3,7 +3,8 @@ https://github.com/Th0masLavigne/Dolfinx_Porous_Media/tree/main
 Thermoelasticy based on: 
 https://comet-fenics.readthedocs.io/en/latest/demo/thermoelasticity/thermoelasticity_transient.html
 
-"thermoelastic-*.py files all generate the same results - seemingly correct for displacement, but ignoring any temperature BCs I apply 
+"thermoelastic-*.py files are seemingly correct for displacement, but ignore any temperature BCs I apply 
+    - there are coupled, decoupled, and nonlinear versions - all give the same results 
 "diffusion-3d.py" works well - which is just the "thermo" part of "thermoelastic"
 "poro.py" is the elastic version of the poroelastic soft tissue paper 
 "poro-thermo.py" is at attempt at combining the poro.py and the thermoelastic (but even thermoelastic.py isn't working perfectly, so don't look at this too much) 
