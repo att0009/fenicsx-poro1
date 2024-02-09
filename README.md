@@ -3,9 +3,15 @@ https://github.com/Th0masLavigne/Dolfinx_Porous_Media/tree/main
 Thermoelasticy based on: 
 https://comet-fenics.readthedocs.io/en/latest/demo/thermoelasticity/thermoelasticity_transient.html
 
-I never got any of the “BoundingBoxTree, compute_collisions, compute_colliding_cells” stuff to work – I always got error messages.  And thus, I never got the any of the matplotlib plots to generate.  
+"thermoelastic-*.py files all generate the same results - seemingly correct for displacement, but ignoring any temperature BCs I apply 
+"diffusion-3d.py" works well - which is just the "thermo" part of "thermoelastic"
+"poro.py" is the elastic version of the poroelastic soft tissue paper 
+"poro-thermo.py" is at attempt at combining the poro.py and the thermoelastic (but even thermoelastic.py isn't working perfectly, so don't look at this too much) 
 
-I did get nice xdmf/h5 files to generate.  They look nice in Paraview, but I did have to interpolate the functions, ie “__p_interpolated.interpolate(__p)” before writing them via
+
+Post-processing notes: 
+-  I never got any of the “BoundingBoxTree, compute_collisions, compute_colliding_cells” stuff to work – I always got error messages.  And thus, I never got the any of the matplotlib plots to generate.  
+-  I did get nice xdmf/h5 files to generate.  They look nice in Paraview, but I did have to interpolate the functions, ie “__p_interpolated.interpolate(__p)” before writing them via
   “xdmf_pressure.write_function( __p_interpolated ,t)”, as opposed to writing the "__p" function directly.  
   This was not necessary if I used first order elements, but first-order elements led to pretty ugly plots (not smooth transitions between elements).  
   It is possible I could have used first order elements, but with way more elements, but for the # of elements given in the code by the author, a minimum of 2nd-order elements were necessary.  
